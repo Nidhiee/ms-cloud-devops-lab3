@@ -1,3 +1,4 @@
+
 terraform {
   required_providers {
     kubernetes = {
@@ -10,6 +11,12 @@ terraform {
 provider "kubernetes" {
   config_path    = "~/.kube/config"
   config_context = "docker-desktop"
+}
+
+# Variables
+
+variable "namespace" {
+  type = string
 }
 
 variable "image_tag" {
@@ -26,27 +33,44 @@ variable "port" {
   type    = number
   default = 8080
 }
+
+# Create Kubernetes Namespace
+
+resource "kubernetes_namespace_v1" "env" {
+  metadata {
+    name = var.namespace
+  }
+}
+
+# Create Kubernetes Deployment
+
 resource "kubernetes_deployment_v1" "hello" {
   metadata {
-    name = "hello-app"
+    name      = "hello-app"
+    namespace = kubernetes_namespace_v1.env.metadata[0].name
   }
+
   spec {
     replicas = var.replicas
+
     selector {
       match_labels = {
         app = "hello-app"
       }
     }
+
     template {
       metadata {
         labels = {
           app = "hello-app"
         }
       }
+
       spec {
         container {
           name  = "hello-app"
           image = "shripada/hello-app:${var.image_tag}"
+
           port {
             container_port = 80
           }
@@ -56,15 +80,21 @@ resource "kubernetes_deployment_v1" "hello" {
   }
 }
 
+# Create Kubernetes Service
+
 resource "kubernetes_service_v1" "hello" {
   metadata {
-    name = "hello-app"
+    name      = "hello-app"
+    namespace = kubernetes_namespace_v1.env.metadata[0].name
   }
+
   spec {
     type = "LoadBalancer"
+
     selector = {
       app = "hello-app"
     }
+
     port {
       port        = var.port
       target_port = 80
@@ -72,6 +102,9 @@ resource "kubernetes_service_v1" "hello" {
   }
 }
 
+# Output Application URL
+
 output "url" {
   value = "http://localhost:${var.port}"
 }
+
